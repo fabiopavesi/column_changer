@@ -1,6 +1,6 @@
 import sys
 
-from fishnet import Db
+from db import Db
 
 changes = {
     'A': 'DECIMAL(26,5) NOT NULL',

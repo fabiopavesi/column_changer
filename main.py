@@ -1,6 +1,6 @@
-from fishnet.db import Db
+from db.db import Db
 import pandas as pd
-from fishnet.table import Table
+from db.table import Table
 import argparse
 import sys
 import getopt
