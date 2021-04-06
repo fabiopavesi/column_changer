@@ -1,4 +1,6 @@
 host="hostname"
 user="db_user"
 password="db_password"
+original_database="fish_pot_2"
 database='db_name'
+docker_container="db_1"
