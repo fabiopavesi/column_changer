@@ -1,6 +1,7 @@
 import sys
 
 from db import Db
+from db.column import Column
 
 changes = {
     'A': 'DECIMAL(26,5) NOT NULL',
@@ -17,9 +18,11 @@ class Table:
         self.table_name = table_name.lower()
         self.df = df
         self.db = Db()
-        self.create_temp_table()
+        # self.create_temp_table()
         self.fields = []
         for index, row in self.df.iterrows():
+            column = Column(self.db, self, row.Y.lower(), row.siglaModifica)
+            print(row.Y.lower(), column.get_original_definition(), column.get_modified_definition())
             self.fields.append({
                 'field': row.Y.lower(),
                 'siglaModifica': row.siglaModifica
