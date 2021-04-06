@@ -13,57 +13,32 @@ all_at_once = False
 new_column_suffix = '_newcolumn'
 
 class Table:
-    def __init__(self, table_name, df, log_file = None):
+    def __init__(self, db, table_name, df, log_file = None, test_mode=False):
         self.log_file = log_file
+        self.test_mode = test_mode
         self.table_name = table_name.lower()
         self.df = df
-        self.db = Db()
-        # self.create_temp_table()
+        self.db = db
         self.fields = []
+        self.columns = []
         for index, row in self.df.iterrows():
             column = Column(self.db, self, row.Y.lower(), row.siglaModifica)
-            print(row.Y.lower(), column.get_original_definition(), column.get_modified_definition())
+            self.columns.append(column)
+            print(self.db.db_name, row.Y.lower(), column.get_original_definition(), column.get_modified_definition())
             self.fields.append({
                 'field': row.Y.lower(),
+                'column': column,
                 'siglaModifica': row.siglaModifica
             })
         # print('table', self.table_name)
         # print('fields', self.fields)
     # print(table_name, df)
 
-    def by_record_error_sum(self, execute=True):
-        cross_field_error = 0
-        print('checking table', self.table_name)
-        field_sum_list = []
-
-        for field in self.fields:
-            field_sum_list.append('SUM(ABS(`{1}` - `{0}`))'.format(
-                self.original_column_name(field["field"]),
-                self.new_column_name(field['field'])
-            ))
-
-        sql = """
-            select {0}
-              from {1}""".format(
-                ' + '.join(field_sum_list),
-                self.table_name
-            )
-
+    def log(self, message):
         if self.log_file is not None:
-            self.log_file.write(sql)
-        if (execute):
-            result = self.db.query(sql)
-            for row in result:
-                for i in range(0, len(field_sum_list)):
-                    cross_field_error += row[0]
-                    # print('sum', field['field'], row[0])
-                    print('.', end='')
-                    sys.stdout.flush()
-                    cross_field_error += row[0]
+            self.log_file.write(message)
 
-        return cross_field_error
-
-    def total_error_sum(self):
+    def get_total_error(self):
         """
         For each modified column it sums original and modified column for all rows, then calculates the absolute value
         of the difference between the two sums
@@ -109,55 +84,50 @@ class Table:
         print('total error', cross_field_error)
         return cross_field_error
 
-    def has_column(self, column):
-        columns = self.db.query(f"select * from information_schema.columns where column_name = '{column.lower()}' and table_name = '{self.table_name.lower()}' ")
-        if len(columns) > 0:
-            return True
-        else:
-            return False
-
     def original_column_name(self, column_name):
-        return f'original_{column_name}'
+        return f'{column_name}'
 
     def new_column_name(self, column_name):
         return f'{column_name}{new_column_suffix}'
 
-    def create_temp_table(self):
-        # self.db.execute(f'create table if not exists {self.table_name} as select * from fish_pot_2.{self.table_name}')
-        result = self.db.query(f'SHOW CREATE TABLE fish_pot_2.{self.table_name}')
-        # print('result: ', result)
-        for row in result:
-            print('create table: ', row[1])
-            self.db.execute(row[1])
+    def prepare_temp_table(self):
+        alters = []
+        updates = []
+        errors = []
+        for column in self.columns:
+            alters.append(column.get_add_table_column_sql(self.new_column_name(column.column_name)))
+            updates.append(column.get_copy_table_column_value_sql(self.new_column_name(column.column_name)))
+            errors.append(column.get_error_sql(self.new_column_name(column.column_name)))
+
+        alter_sql = 'ALTER TABLE ' + self.table_name + ' ' + ',\n '.join(alters)
+        update_sql = 'UPDATE ' + self.table_name + ' SET ' + ',\n '.join(updates)
+        errors_sql = 'SELECT ' + '\n + '.join(errors) + ' FROM ' + self.table_name
+        self.log(alter_sql + ";\n")
+        self.log(update_sql + ";\n")
+        self.log(errors_sql + ";\n")
+        if self.test_mode:
+            print(alter_sql)
+            print(update_sql)
+            print(errors_sql)
+        else:
+            print('actually running')
+            print(alter_sql)
+            a = self.db.execute(alter_sql)
+            print(update_sql)
+            b = self.db.execute(update_sql)
+            print(errors_sql)
+            results = self.db.query(errors_sql)
+            total_error = 0
+            for row in results:
+                total_error = row[0]
+                print('Total error for', self.table_name, row[0])
+            self.log(self.table_name + '\t' + str(total_error))
+
+        # # self.db.execute(f'create table if not exists {self.table_name} as select * from fish_pot_2.{self.table_name}')
+        # result = self.db.query(f'SHOW CREATE TABLE fish_pot_2.{self.table_name}')
+        # # print('result: ', result)
+        # for row in result:
+        #     print('create table: ', row[1])
+        #     self.db.execute(row[1])
 
 
-    def get_alter_table_column_sql(self):
-        # print(self.df)
-        sql = f'alter table {self.table_name}\n'
-        columns = []
-        for row in self.fields:
-            columns.append(f' MODIFY `{self.original_column_name(row["field"])}` {changes[row["siglaModifica"]]}')
-        sql += ',\n'.join(columns)
-        # print(sql)
-        return sql
-
-    def get_add_table_column_sql(self):
-        # print(self.df)
-        sql = f'alter table {self.table_name}\n'
-        columns = []
-        for row in self.fields:
-            columns.append(f' ADD `{self.new_column_name(row["field"])}` {changes[row["siglaModifica"]]}')
-            columns.append(f' RENAME COLUMN `{row["field"]}` TO `{self.original_column_name(row["field"])}`')
-        sql += ',\n'.join(columns)
-        # print(sql)
-        return sql
-
-    def get_copy_table_column_value_sql(self):
-        # print(self.df)
-        sql = f'UPDATE {self.table_name}\n SET '
-        columns = []
-        for row in self.fields:
-            columns.append(f' `{self.new_column_name(row["field"])}` = `{self.original_column_name(row["field"])}`')
-        sql += ',\n'.join(columns)
-        # print(sql)
-        return sql
