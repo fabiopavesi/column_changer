@@ -2,6 +2,7 @@ import sys
 import time
 
 from db.column import Column
+from db.error_evaluation_strategy import SumOfAbsoluteDiffences
 
 changes = {
     'A': 'DECIMAL(26,5) NOT NULL',
@@ -13,7 +14,7 @@ all_at_once = False
 new_column_suffix = '_newcolumn'
 
 class Table:
-    def __init__(self, db, table_name, df, results_log=None, sql_log=None, test_mode=False):
+    def __init__(self, db, table_name, df, results_log=None, sql_log=None, test_mode=False, error_evaluation_strategy=SumOfAbsoluteDiffences()):
         self.log_file = results_log
         self.script_log = sql_log
         self.test_mode = test_mode
@@ -49,22 +50,17 @@ class Table:
     def prepare_temp_table(self):
         alters = []
         updates = []
-        errors = []
         for column in self.columns:
             alters.append(column.get_add_table_column_sql(self.new_column_name(column.column_name)))
             updates.append(column.get_copy_table_column_value_sql(self.new_column_name(column.column_name)))
-            errors.append(column.get_error_sql(self.new_column_name(column.column_name)))
 
         alter_sql = 'ALTER TABLE ' + self.table_name + ' ' + ',\n '.join(alters)
         update_sql = 'UPDATE ' + self.table_name + ' SET ' + ',\n '.join(updates)
-        errors_sql = 'SELECT ' + '\n + '.join(errors) + ' AS a FROM ' + self.table_name
         self.log_script(alter_sql + ";\n")
         self.log_script(update_sql + ";\n")
-        self.log_script(errors_sql + ";\n")
         if self.test_mode:
             print(alter_sql)
             print(update_sql)
-            print(errors_sql)
         else:
             # print('actually running')
             # print(alter_sql)
@@ -72,10 +68,32 @@ class Table:
             # print(update_sql)
             self.db.execute(update_sql)
             self.db.commit()
+
+    def get_alter_table_for_original_table(self):
+        alters = []
+        for column in self.columns:
+            alters.append(column.get_alter_table_column_sql())
+
+        alter_sql = 'ALTER TABLE ' + self.table_name + ' ' + ',\n '.join(alters) + ";\n"
+        self.log_script(alter_sql)
+        return alter_sql
+
+    def test_temp_table(self):
+        errors = []
+        for column in self.columns:
+            errors.append(column.get_error_sql(self.new_column_name(column.column_name)))
+
+        errors_sql = 'SELECT ' + '\n + '.join(errors) + ' AS a FROM ' + self.table_name
+        self.log_script(errors_sql + ";\n")
+        if self.test_mode:
+            print(errors_sql)
+        else:
+            self.db.commit()
             # print(errors_sql)
             results = self.db.query(errors_sql)
-            total_error = 0
+            total_errors = float(0)
             for row in results:
-                total_error = row[0]
+                total_errors = float(row[0])
                 print('Total error for', self.table_name, row[0])
-            self.log_results(self.table_name + ';' + str(total_error) + '\n')
+            self.log_results(self.table_name + ';' + str(total_errors) + '\n')
+            return total_errors

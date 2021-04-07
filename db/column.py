@@ -1,3 +1,5 @@
+from db.error_evaluation_strategy import SumOfAbsoluteDiffences
+
 changes = {
     'A': 'DECIMAL(26,5) NOT NULL',
     'B': 'DOUBLE NOT NULL',
@@ -6,12 +8,13 @@ changes = {
 
 class Column:
 
-    def __init__(self, db, table, column_name, requested_change):
+    def __init__(self, db, table, column_name, requested_change, error_evaluation_strategy=SumOfAbsoluteDiffences()):
         self.table = table
         self.db = db
         self.column_name = column_name
         self.definition = None
         self.requested_change = requested_change
+        self.error_evaluation_strategy = error_evaluation_strategy
         self.parse_definition()
 
     def __repr__(self):
@@ -66,4 +69,5 @@ class Column:
         return f' `{new_name}` = `{self.column_name}`'
 
     def get_error_sql(self, new_name):
-        return f' SUM(ABS(`{new_name}` - `{self.column_name}`))'
+        # return f' SUM(ABS(`{new_name}` - `{self.column_name}`))'
+        return self.error_evaluation_strategy(self.column_name, new_name)
