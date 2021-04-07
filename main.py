@@ -40,11 +40,11 @@ def run():
     df = df.groupby('X')
     db = Db(TEMP_DB)
     with open('script.sql', 'w') as file:
-        # with open(result_file, 'w') as results:
-        for d in df:
-            (table_name, data) = d
-            t = Table(db, table_name, data, file, test_mode=False)
-            t.prepare_temp_table()
+        with open(result_file, 'w') as results:
+            for d in df:
+                (table_name, data) = d
+                t = Table(db, table_name, data, sql_log=file, results_log=results, test_mode=False)
+                t.prepare_temp_table()
 
             # (table_name, data) = d
             # t = Table(db, table_name, data)

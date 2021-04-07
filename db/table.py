@@ -1,4 +1,5 @@
 import sys
+import time
 
 from db import Db
 from db.column import Column
@@ -13,8 +14,9 @@ all_at_once = False
 new_column_suffix = '_newcolumn'
 
 class Table:
-    def __init__(self, db, table_name, df, log_file = None, test_mode=False):
-        self.log_file = log_file
+    def __init__(self, db, table_name, df, results_log=None, sql_log=None, test_mode=False):
+        self.log_file = results_log
+        self.script_log = sql_log
         self.test_mode = test_mode
         self.table_name = table_name.lower()
         self.df = df
@@ -34,7 +36,11 @@ class Table:
         # print('fields', self.fields)
     # print(table_name, df)
 
-    def log(self, message):
+    def log_script(self, message):
+        if self.script_log is not None:
+            self.script_log.write(message)
+
+    def log_results(self, message):
         if self.log_file is not None:
             self.log_file.write(message)
 
@@ -101,10 +107,10 @@ class Table:
 
         alter_sql = 'ALTER TABLE ' + self.table_name + ' ' + ',\n '.join(alters)
         update_sql = 'UPDATE ' + self.table_name + ' SET ' + ',\n '.join(updates)
-        errors_sql = 'SELECT ' + '\n + '.join(errors) + ' FROM ' + self.table_name
-        self.log(alter_sql + ";\n")
-        self.log(update_sql + ";\n")
-        self.log(errors_sql + ";\n")
+        errors_sql = 'SELECT ' + '\n + '.join(errors) + ' AS a FROM ' + self.table_name
+        self.log_script(alter_sql + ";\n")
+        self.log_script(update_sql + ";\n")
+        self.log_script(errors_sql + ";\n")
         if self.test_mode:
             print(alter_sql)
             print(update_sql)
@@ -112,16 +118,19 @@ class Table:
         else:
             print('actually running')
             print(alter_sql)
-            a = self.db.execute(alter_sql)
+            a = self.db.query(alter_sql)
             print(update_sql)
-            b = self.db.execute(update_sql)
+            time.sleep(2.4)
+            b = self.db.query(update_sql)
+            self.db.db.commit()
             print(errors_sql)
+            time.sleep(2.4)
             results = self.db.query(errors_sql)
             total_error = 0
             for row in results:
                 total_error = row[0]
                 print('Total error for', self.table_name, row[0])
-            self.log(self.table_name + '\t' + str(total_error))
+            self.log_results(self.table_name + ';' + str(total_error) + '\n')
 
         # # self.db.execute(f'create table if not exists {self.table_name} as select * from fish_pot_2.{self.table_name}')
         # result = self.db.query(f'SHOW CREATE TABLE fish_pot_2.{self.table_name}')
