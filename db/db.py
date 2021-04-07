@@ -31,3 +31,6 @@ class Db:
         cursor = self.db.cursor()
         cursor.execute(sql)
         # self.db.close()
+
+    def commit(self):
+        self.db.commit()

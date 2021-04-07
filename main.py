@@ -2,16 +2,16 @@ from db.backupper import Backupper
 from db.db import Db
 import pandas as pd
 from db.table import Table
-import argparse
 import sys
 import getopt
 import config
 
-TEMP_DB = 'temp'
+TEMP_DB = config.database
+ORIGINAL_DB = config.original_database
 
 def create_temp_db():
     backupper = Backupper(config.docker_container, config.user, config.password, config.host)
-    backupper.backup('fish_pot_2', 'fish_pot_2.sql')
+    backupper.backup(ORIGINAL_DB, 'fish_pot_2.sql')
     backupper.restore(TEMP_DB, 'fish_pot_2.sql')
 
 def test():
@@ -24,13 +24,6 @@ def test():
             (table_name, data) = d
             t = Table(db, table_name, data, file, test_mode=True)
             t.prepare_temp_table()
-            # sql = t.get_add_table_column_sql()
-            # file.write(sql + ';\n')
-            # sql = t.get_copy_table_column_value_sql()
-            # file.write(sql + ';\n')
-            # file.write('\n')
-            # t.by_record_error_sum(False)
-            # # print(table_name, sql)
 
 def run():
     infile = 'data.csv'
@@ -45,22 +38,6 @@ def run():
                 (table_name, data) = d
                 t = Table(db, table_name, data, sql_log=file, results_log=results, test_mode=False)
                 t.prepare_temp_table()
-
-            # (table_name, data) = d
-            # t = Table(db, table_name, data)
-            # sql = None
-            # try:
-            #     sql = t.get_add_table_column_sql()
-            #     db.execute(sql)
-            #     sql = t.get_copy_table_column_value_sql()
-            #     db.execute(sql)
-            #     errors = t.by_record_error_sum()
-            #     results.write(f'{table_name};{errors}\n')
-            #     print('total error on table', table_name, errors)
-            # except Exception as e:
-            #     print('Exception changing ', table_name)
-            #     print(e)
-            #     print('executed', sql)
 
 
 test_mode = False
